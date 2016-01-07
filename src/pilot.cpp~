@@ -87,7 +87,7 @@ void Pilot::velCallback(const geometry_msgs::Twist::ConstPtr& update) {
 
 void Pilot::sendThrusterMessage() {
   // init message
-  mavros_msgs::ActuatorControl actuator_msg;
+  mavros::ActuatorControl actuator_msg;
   actuator_msg.header.stamp = ros::Time::now();
   actuator_msg.header.frame_id = "base_link";
   actuator_msg.group_mix = 0;

@@ -7,7 +7,7 @@
 
 #include <vector>
 #include <ros/ros.h>
-#include <mavros_msgs/CommandLong.h>
+#include <mavros_msgss/CommandLong.h>
 #include <geometry_msgs/Twist.h>
 #include <std_msgs/Bool.h>
 #include <dynamic_reconfigure/server.h>
