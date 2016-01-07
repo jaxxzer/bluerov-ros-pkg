@@ -10,6 +10,7 @@
 #include <mavros_msgs/CommandLong.h>
 #include <mavros_msgs/CommandBool.h>
 //#include <mavros_msgs/CommandLongRequest.h>
+#include <mavros_msgs/SetMode.h>
 #include <mavros_msgs/OverrideRCIn.h>
 #include <geometry_msgs/Twist.h>
 #include <std_msgs/Bool.h>
