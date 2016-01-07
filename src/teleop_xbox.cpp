@@ -11,6 +11,7 @@
 #include <geometry_msgs/Twist.h>
 #include <sensor_msgs/Joy.h>
 #include <std_msgs/Bool.h>
+#include <std_msgs/UInt8.h>
 #include <dynamic_reconfigure/server.h>
 #include <bluerov/teleop_xboxConfig.h>
 
@@ -20,16 +21,21 @@ class TeleopXbox {
     void spin();
 
   private:
+    uint8_t _flightMode;
+
     ros::NodeHandle nh;
     ros::Publisher cmd_vel_pub;
     ros::Publisher hazard_enable_pub;
     ros::Subscriber joy_sub;
 
+    ros::Publisher cmd_mode_pub;
     dynamic_reconfigure::Server<bluerov::teleop_xboxConfig> server;
     bluerov::teleop_xboxConfig config;
 
     bool initLT;
     bool initRT;
+
+    uint8_t cycleFlightMode();
 
     void configCallback(bluerov::teleop_xboxConfig &update, uint32_t level);
     void joyCallback(const sensor_msgs::Joy::ConstPtr& joy);
@@ -47,9 +53,13 @@ TeleopXbox::TeleopXbox() {
   hazard_enable_pub = nh.advertise<std_msgs::Bool>("hazard_enable", 1);
   joy_sub = nh.subscribe<sensor_msgs::Joy>("joy", 1, &TeleopXbox::joyCallback, this);
 
+  cmd_mode_pub = nh.advertise<std_msgs::UInt8>("cmd_mode", 1);
+
   // set initial values
   initLT = false;
   initRT = false;
+
+  _flightMode = 0;
 }
 
 void TeleopXbox::spin() {
@@ -75,10 +85,24 @@ void TeleopXbox::joyCallback(const sensor_msgs::Joy::ConstPtr& joy) {
   msg.linear.x =  config.x_scaling  * computeAxisValue(joy, config.x_axis,  config.expo);
   msg.linear.y =  config.y_scaling  * computeAxisValue(joy, config.y_axis,  config.expo);
   msg.linear.z =  config.z_scaling  * computeAxisValue(joy, config.z_axis,  config.expo);
-  msg.angular.x = config.wx_scaling * computeAxisValue(joy, config.wx_axis, config.expo);
+  msg.angular.x = config.x_scaling * computeAxisValue(joy, config.wx_axis, config.expo);
   msg.angular.y = config.wy_scaling * computeAxisValue(joy, config.wy_axis, config.expo);
   msg.angular.z = config.wz_scaling * computeAxisValue(joy, config.wz_axis, config.expo);
   cmd_vel_pub.publish(msg);
+
+  std_msgs::UInt8 mode;
+
+  if(joy->buttons[2] > 0) {//x button
+//may need to debounce buttons for this
+    //mode.data = cycleFlightMode();
+    mode.data = 0; // stabilize
+    cmd_mode_pub.publish(mode);
+  } else if(joy->buttons[3] > 0) {// y button
+    mode.data =1; // acro
+    cmd_mode_pub.publish(mode);
+  }
+
+
 
   // send hazards enable message
   if(joy->buttons[config.disable_button] > 0) {
@@ -93,6 +117,10 @@ void TeleopXbox::joyCallback(const sensor_msgs::Joy::ConstPtr& joy) {
     hazard_enable_pub.publish(hmsg);
     // ROS_INFO("Hazards enabled.");
   }
+}
+
+uint8_t TeleopXbox::cycleFlightMode() {
+  return _flightMode++%3;
 }
 
 double TeleopXbox::computeAxisValue(const sensor_msgs::Joy::ConstPtr& joy, int index, double expo) {
@@ -115,7 +143,7 @@ double TeleopXbox::computeAxisValue(const sensor_msgs::Joy::ConstPtr& joy, int i
   }
   else if(index == 7) {
     // this is the bumper pair pseudo axis (RB-LB; pressing RB results in a positive number)
-    value = (joy->buttons[5] - joy->buttons[4]) / 2.0;
+    value = (joy->buttons[5] - joy->buttons[4]) / 1.3;
   }
   else {
     value = joy->axes[index];

@@ -7,9 +7,13 @@
 
 #include <vector>
 #include <ros/ros.h>
-#include <mavros/CommandLong.h>
+#include <mavros_msgs/CommandLong.h>
+#include <mavros_msgs/CommandBool.h>
+//#include <mavros_msgs/CommandLongRequest.h>
+#include <mavros_msgs/OverrideRCIn.h>
 #include <geometry_msgs/Twist.h>
 #include <std_msgs/Bool.h>
+#include <std_msgs/UInt8.h>
 #include <dynamic_reconfigure/server.h>
 #include <bluerov/simple_pilotConfig.h>
 
@@ -24,16 +28,26 @@ class Pilot {
     ros::ServiceClient command_client;
     ros::Subscriber cmd_vel_sub;
     ros::Subscriber hazard_enable_sub;
+    ros::Publisher rc_override_pub;
+
+    ros::Subscriber cmd_mode_sub;
+    ros::ServiceClient arming_client;
+    ros::ServiceClient mode_client;
 
     dynamic_reconfigure::Server<bluerov::simple_pilotConfig> server;
     bluerov::simple_pilotConfig config;
 
     bool hazards_enabled;
+    
 
     void configCallback(bluerov::simple_pilotConfig &update, uint32_t level);
-    void setServo(int index, float pulse_width);
+    void setServo(int index, float pulse_width);//parameter is not a pulse width
+    void overrideRC(float* rc_in);
+    void setArmed(bool armed);
+    void setMode(uint8_t mode);
     void velCallback(const geometry_msgs::Twist::ConstPtr& cmd_vel);
     void hazardCallback(const std_msgs::Bool::ConstPtr& msg);
+    void modeCallback(const std_msgs::UInt8::ConstPtr& cmd_mode);
 };
 
 Pilot::Pilot() {
@@ -43,12 +57,18 @@ Pilot::Pilot() {
   server.setCallback(f);
 
   // connects subs and pubs
-  command_client = nh.serviceClient<mavros::CommandLong>("/mavros/cmd/command");
+  command_client = nh.serviceClient<mavros_msgs::CommandLong>("/mavros/cmd/command");
+  arming_client = nh.serviceClient<mavros_msgs::CommandBool>("/mavros/cmd/arming");
+  mode_client = nh.serviceClient<mavros_msgs::SetMode>("/mavros/set_mode");
+  cmd_mode_sub = nh.subscribe<std_msgs::UInt8>("cmd_mode", 1, &Pilot::modeCallback, this);
   cmd_vel_sub = nh.subscribe<geometry_msgs::Twist>("cmd_vel", 1, &Pilot::velCallback, this);
   hazard_enable_sub = nh.subscribe<std_msgs::Bool>("hazard_enable", 1, &Pilot::hazardCallback, this);
 
   // set initial values
   hazards_enabled = false;
+
+
+  rc_override_pub = nh.advertise<mavros_msgs::OverrideRCIn>("mavros/rc/override", 1);
 }
 
 void Pilot::spin() {
@@ -75,12 +95,52 @@ void Pilot::setServo(int index, float value) {
   // send mavros command message
   // http://docs.ros.org/api/mavros/html/srv/CommandLong.html
   // CMD_DO_SET_SERVO (183): https://pixhawk.ethz.ch/mavlink/
-  mavros::CommandLong srv;
-  srv.request.command = mavros::CommandLongRequest::CMD_DO_SET_SERVO;
+  mavros_msgs::CommandLong srv;
+  //srv.request.command = mavros::CommandLongRequest::CMD_DO_SET_SERVO;
+  srv.request.command = 183u;
   srv.request.param1 = index + 1; // servos are 1-indexed here
   srv.request.param2 = pulse_width;
   bool result = command_client.call(srv);
   //ROS_INFO_STREAM("Pilot::setServo(" << index << ", " << value << ") = " << result);
+}
+
+void Pilot::overrideRC(float values[8]) {
+  // thruster values should be between 1100 and 1900 microseconds (us)
+  // values less than 1500 us are backwards; values more than are forwards
+  uint16_t pulse_width[8];
+  for(int i = 0; i < 8; i++) {
+    pulse_width[i] = (values[i] + 1) * 500 + 1000;//using range 1000-2000 for arming/disarming purposes
+//if we always output 1000-2000 on pi, actual ranges to escs can be configured/limited via apm parameters
+  }
+
+  mavros_msgs::OverrideRCIn rc;
+  //rc.request.command = 70u;
+  //rc.request.param1 = index + 1; // servos are 1-indexed here
+  for(int i = 0; i < 8; i++) {
+    rc.channels[i] = pulse_width[i];
+  }
+  rc_override_pub.publish(rc);
+}
+
+void Pilot::setArmed(bool armed) {
+  mavros_msgs::CommandBool arm;
+  arm.request.value = armed;
+  bool result = arming_client.call(arm);
+
+}
+
+void Pilot::setMode(uint8_t mode) {
+  mavros_msgs::SetMode set;
+
+  //set.request.command = 11u;
+  set.request.base_mode = mode;
+  set.request.custom_mode = "";
+  bool result = mode_client.call(set);
+}
+
+void Pilot::modeCallback(const std_msgs::UInt8::ConstPtr& cmd_mode) {
+  setMode(cmd_mode->data);
+
 }
 
 void Pilot::velCallback(const geometry_msgs::Twist::ConstPtr& cmd_vel) {
@@ -94,7 +154,7 @@ void Pilot::velCallback(const geometry_msgs::Twist::ConstPtr& cmd_vel) {
   float forward  = cmd_vel->linear.x;
   float strafe   = cmd_vel->linear.y;
   float vertical = cmd_vel->linear.z;
-
+/*
   // build thruster commands (expected to be between -1 and 1)
   float thruster[6];
   thruster[0] =
@@ -119,25 +179,70 @@ void Pilot::velCallback(const geometry_msgs::Twist::ConstPtr& cmd_vel) {
   thruster[3] = -yaw + forward; // Forward Left (FL)
   thruster[4] = strafe; // LATeral (LAT)
   thruster[5] = yaw + forward; // Forward Right (FR)
+*/
 
+/*
+  float rc_in[8];
+	rc_in[0] = pitch;
+	rc_in[1] = roll;//yaw
+	rc_in[2] = vertical;
+	rc_in[3] = yaw;//strafe
+	rc_in[4] = -1.0f;
+	rc_in[5] = -1.0f;
+	rc_in[6] = forward;
+	rc_in[7] = strafe;//roll
+
+*/
+
+//Remap channels
+//Right joystick: u/d = pitch, l/r = roll
+//Left joystick: u/d = thrust(throttle forward), l/r = yaw
+//Right/Left triggers: climb/descend
+//Right/Left bumpers: strafe left/right
+//ToDo: fix up names, maybe use channel mapper
+  float rc_in[8];
+	rc_in[0] = pitch;
+	rc_in[1] = yaw;//yaw
+	rc_in[2] = vertical;
+	rc_in[3] = -strafe;//strafe
+	rc_in[4] = -1.0f;
+	rc_in[5] = -1.0f;
+	//rc_in[5] = mode_rc;
+	rc_in[6] = forward;
+	rc_in[7] = roll;//roll
+
+
+/*
   // send thruster positions
   for(int i = 0; i < 6; i++) {
    setServo(i, thruster[i]);
   }
+*/
+  // send rc positions
+
+  overrideRC(rc_in);
+
 }
 
 void Pilot::hazardCallback(const std_msgs::Bool::ConstPtr& msg) {
   // save message data
   hazards_enabled = msg->data;
-  if(hazards_enabled) ROS_INFO("Enabled thrusters.");
-  else ROS_INFO("Disabled thrusters.");
+  if(hazards_enabled) {
+    setArmed(true);
+    ROS_INFO("Enabled thrusters.");
+
+  } else ROS_INFO("Disabled thrusters.");
 
   // zero thruster speeds
   if(!hazards_enabled) {
     for(int i = 0; i < 6; i++) {
+     setArmed(false);
      setServo(i, 0);
+	//ToDo: send mavros message to disarm, set overrideRC to go into failsafe mode on apm 
+//overrideRC(rc_zero)
     }
   }
+
 }
 
 int main(int argc, char** argv) {

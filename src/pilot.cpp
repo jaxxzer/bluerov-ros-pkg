@@ -7,8 +7,9 @@
 
 #include <math.h>
 #include <ros/ros.h>
-#include <mavros/ActuatorControl.h>
+#include <mavros_msgs/ActuatorControl.h>
 #include <geometry_msgs/Twist.h>
+#include <std_msgs/UInt8.h>
 
 class Pilot {
   public:
@@ -27,6 +28,7 @@ class Pilot {
     geometry_msgs::Twist::ConstPtr cmd_vel;
 
     void velCallback(const geometry_msgs::Twist::ConstPtr& update);
+    //void modeCallback(const std_msgs::UInt8::ConstPtr& update);
     void sendThrusterMessage();
 };
 
@@ -41,9 +43,9 @@ Pilot::Pilot() {
   ROS_INFO_STREAM("param pub_rate: " << pub_rate);
 
   // connects subs and pubs
-  actuator_pub = nh.advertise<mavros::ActuatorControl>("actuator_control", 1);
+  actuator_pub = nh.advertise<mavros_msgs::ActuatorControl>("actuator_control", 1);
   cmd_vel_sub = nh.subscribe<geometry_msgs::Twist>("cmd_vel", 1, &Pilot::velCallback, this);
-
+  //cmd_mode_sub = nh.subscribe<std_msgs::UInt8>("cmd_mode", 1, &Pilot::modeCallback, this);
   // setup
   last_actuator_pub = ros::Time::now();
   min_actuator_pub_period = ros::Duration(1.0 / pub_rate);
@@ -87,7 +89,7 @@ void Pilot::velCallback(const geometry_msgs::Twist::ConstPtr& update) {
 
 void Pilot::sendThrusterMessage() {
   // init message
-  mavros::ActuatorControl actuator_msg;
+  mavros_msgs::ActuatorControl actuator_msg;
   actuator_msg.header.stamp = ros::Time::now();
   actuator_msg.header.frame_id = "base_link";
   actuator_msg.group_mix = 0;
