@@ -98,8 +98,14 @@ void TeleopXbox::joyCallback(const sensor_msgs::Joy::ConstPtr& joy) {
     mode.data = 0; // stabilize
     cmd_mode_pub.publish(mode);
   } else if(joy->buttons[3] > 0) {// y button
-    mode.data =1; // acro
+    mode.data = 1; // acro
     cmd_mode_pub.publish(mode);
+  } else if(joy->buttons[6] > 0) { //select button
+	  mode.data = 2; //depth hold
+	  cmd_mode_pub.publish(mode);
+  } else if(joy->buttons[7] > 0) { //start button
+	  mode.data = 9; //land
+	  cmd_mode_pub.publish(mode);
   }
 
 

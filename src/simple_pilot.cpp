@@ -149,11 +149,11 @@ void Pilot::velCallback(const geometry_msgs::Twist::ConstPtr& cmd_vel) {
   if(!hazards_enabled) return;
 
   // extract cmd_vel message
-  float roll     = cmd_vel->angular.x;
-  float pitch    = cmd_vel->angular.y;
-  float yaw      = cmd_vel->angular.z;
+  float roll     = cmd_vel->angular.y;
+  float strafe    = cmd_vel->angular.x;
+  float pitch      = cmd_vel->angular.z;
   float forward  = cmd_vel->linear.x;
-  float strafe   = cmd_vel->linear.y;
+  float yaw   = cmd_vel->linear.y;
   float vertical = cmd_vel->linear.z;
 /*
   // build thruster commands (expected to be between -1 and 1)
@@ -202,15 +202,15 @@ void Pilot::velCallback(const geometry_msgs::Twist::ConstPtr& cmd_vel) {
 //Right/Left bumpers: strafe left/right
 //ToDo: fix up names, maybe use channel mapper
   float rc_in[8];
-	rc_in[0] = pitch;
-	rc_in[1] = yaw;//yaw
+	rc_in[0] = -pitch;
+	rc_in[1] = -roll;//yaw
 	rc_in[2] = vertical;
-	rc_in[3] = -strafe;//strafe
+	rc_in[3] = -yaw;//strafe
 	rc_in[4] = -1.0f;
 	rc_in[5] = -1.0f;
 	//rc_in[5] = mode_rc;
 	rc_in[6] = forward;
-	rc_in[7] = roll;//roll
+	rc_in[7] = strafe;//roll
 
 
 /*
