@@ -207,10 +207,11 @@ void Pilot::velCallback(const geometry_msgs::Twist::ConstPtr& cmd_vel) {
 	rc_in[2] = vertical;
 	rc_in[3] = -yaw;//strafe
 	rc_in[4] = -1.0f;
-	rc_in[5] = -1.0f;
+	//rc_in[5] = -1.0f;
 	//rc_in[5] = mode_rc;
-	rc_in[6] = forward;
-	rc_in[7] = strafe;//roll
+	rc_in[5] = forward;
+	rc_in[6] = strafe;//roll
+	rc_in[7] = -1.0f;
 
 
 /*
