@@ -120,6 +120,7 @@ void Pilot::overrideRC(float values[8]) {
   for(int i = 0; i < 8; i++) {
     rc.channels[i] = pulse_width[i];
   }
+  rc.channels[4] = 65535;
   rc_override_pub.publish(rc);
 }
 
@@ -131,12 +132,34 @@ void Pilot::setArmed(bool armed) {
 }
 
 void Pilot::setMode(uint8_t mode) {
-  mavros_msgs::SetMode set;
 
-  //set.request.command = 11u;
-  set.request.base_mode = mode;
-  set.request.custom_mode = "";
-  bool result = mode_client.call(set);
+  mavros_msgs::OverrideRCIn rc;
+  for(int i = 0; i < 8; i++) {
+	  rc.channels[i] = 65535; // No change flag
+  }
+
+  switch(mode) {
+
+  case 0:
+		  rc.channels[4] = 1000;
+  	  	  break;
+  case 2:
+		  rc.channels[4] = 2000;
+  	  	  break;
+  case 9:
+	  	  rc.channels[4] = 1500;
+	  	  break;
+  default:
+	  	  ROS_INFO("mode failed");
+	  	  break;
+
+  }
+  rc_override_pub.publish(rc);
+//  mavros_msgs::SetMode set;
+
+//  set.request.base_mode = 0;
+//  set.request.custom_mode = "3";
+//  bool result = mode_client.call(set);
 }
 
 void Pilot::modeCallback(const std_msgs::UInt8::ConstPtr& cmd_mode) {
